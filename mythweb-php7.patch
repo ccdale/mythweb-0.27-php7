@@ -1,0 +1,268 @@
+diff -ru orig/classes/Database/mysql.php mythweb-0.27.5/classes/Database/mysql.php
+--- orig/classes/Database/mysql.php	2015-05-03 22:39:10.000000000 +0100
++++ mythweb-0.27.5/classes/Database/mysql.php	2016-01-23 16:24:23.194414028 +0000
+@@ -40,24 +40,20 @@
+ /**/
+     function __construct($db_name, $login, $password, $server='localhost', $port=NULL, $options=NULL) {
+     // Attempt to make sure the extension is loaded
+-        if (!extension_loaded('mysql')) {
++        if (!extension_loaded('mysqli')) {
+         // This function is deprecated as of php5, so we see if we can use it
+             if (function_exists('dl')) {
+             // Attempt to allow dl to be used
+                 ini_set('enable_dl', true);
+                 if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN')
+-                    dl('php_mysql.dll');
++                    dl('php_mysqli.dll');
+                 else
+-                    dl('mysql.so');
++                    dl('mysqli.so');
+             }
+         }
+     // Connect to the database
+-        $this->dbh = @mysql_connect($port ? "$server:$port" : $server, $login, $password)
+-            or $this->error("Can't connect to the database server.");
+-        if ($this->dbh) {
+-            @mysql_select_db($db_name, $this->dbh)
+-                or $this->error("Can't access the database file.");
+-        }
++        $this->dbh = @mysqli_connect($port ? "$server:$port" : $server, $login, $password, $db_name)
++            or $this->error("Cannot connect to the database server.");
+     }
+ 
+ /**
+@@ -73,7 +69,7 @@
+         if (is_null($string))
+             return 'NULL';
+     // Just a string
+-        return str_replace('?', '\\?', "'".mysql_real_escape_string($string, $this->dbh)."'");
++        return str_replace('?', '\\?', "'".mysqli_real_escape_string($this->dbh, $string)."'");
+     }
+ 
+ /**
+@@ -110,28 +106,28 @@
+  * @return string The most recent error string
+ /**/
+     function _errstr() {
+-        return $this->dbh ? mysql_error($this->dbh) : mysql_error();
++        return $this->dbh ? mysqli_error($this->dbh) : mysqli_error();
+     }
+ 
+ /**
+  * @return int The most recent error number
+ /**/
+     function _errno() {
+-        return $this->dbh ? mysql_errno($this->dbh) : mysql_errno();
++        return $this->dbh ? mysqli_errno($this->dbh) : mysqli_errno();
+     }
+ 
+ /**
+  * @return string Information about the mysql server
+ /**/
+     function server_info() {
+-        return mysql_get_server_info($this->dbh);
++        return mysqli_get_server_info($this->dbh);
+     }
+ 
+ /**
+  * @return bool true on success
+ /**/
+     function close() {
+-        return mysql_close($this->dbh);
++        return mysqli_close($this->dbh);
+     }
+ 
+ }
+diff -ru orig/classes/Database/Query/mysql.php mythweb-0.27.5/classes/Database/Query/mysql.php
+--- orig/classes/Database/Query/mysql.php	2015-05-03 22:39:10.000000000 +0100
++++ mythweb-0.27.5/classes/Database/Query/mysql.php	2016-01-23 16:29:31.703088979 +0000
+@@ -54,7 +54,7 @@
+                 $arg = array_shift($args);
+                 $this->last_query .= is_null($arg)
+                                         ? 'NULL'
+-                                        : "'".mysql_real_escape_string($arg)."'";
++                                        : "'".mysqli_real_escape_string($this->dbh,$arg)."'";
+             }
+         }
+     // Perform the query
+@@ -63,20 +63,20 @@
+             $this->db->error();
+             trigger_error($this->db->error, E_USER_ERROR);
+         }
+-        $this->sh = mysql_query($this->last_query, $this->dbh);
++        $this->sh = mysqli_query($this->dbh, $this->last_query);
+ 
+     // Cache these
+         if (is_bool($this->sh)) {
+-            $this->insert_id     = mysql_insert_id($this->dbh);
+-            $this->affected_rows = mysql_affected_rows($this->dbh);
++            $this->insert_id     = mysqli_insert_id($this->dbh);
++            $this->affected_rows = mysqli_affected_rows($this->dbh);
+         }
+         else {
+-            $this->num_rows      = mysql_num_rows($this->sh);
++            $this->num_rows      = mysqli_num_rows($this->sh);
+         }
+ 
+         if ($this->sh === false) {
+             if ($this->db->fatal_errors)
+-                trigger_error('SQL Error: '.mysql_error($this->dbh).' [#'.mysql_errno($this->dbh).']', E_USER_ERROR);
++                trigger_error('SQL Error: '.mysqli_error($this->dbh).' [#'.mysqli_errno($this->dbh).']', E_USER_ERROR);
+             else
+                 $this->db->error();
+         }
+@@ -96,7 +96,7 @@
+  * @return mixed
+ /**/
+     function fetch_col() {
+-        list($return) = mysql_fetch_row($this->sh);
++        list($return) = mysqli_fetch_row($this->sh);
+         return $return;
+     }
+ 
+@@ -114,7 +114,7 @@
+  * @return array
+ /**/
+     function fetch_row() {
+-        return mysql_fetch_row($this->sh);
++        return mysqli_fetch_row($this->sh);
+     }
+ 
+ /**
+@@ -124,7 +124,7 @@
+  * @return assoc
+ /**/
+     function fetch_assoc() {
+-        return mysql_fetch_assoc($this->sh);
++        return mysqli_fetch_assoc($this->sh);
+     }
+ 
+ /**
+@@ -134,7 +134,7 @@
+  * @return assoc
+ /**/
+     function fetch_array($result_type=MYSQL_BOTH) {
+-        return mysql_fetch_array($this->sh, $result_type);
++        return mysqli_fetch_array($this->sh, $result_type);
+     }
+ 
+ /**
+@@ -144,7 +144,7 @@
+  * @return object
+ /**/
+     function fetch_object() {
+-        return mysql_fetch_object($this->sh);
++        return mysqli_fetch_object($this->sh);
+     }
+ 
+ /**
+@@ -152,7 +152,7 @@
+  * @return bool
+ /**/
+     function data_seek($row_number) {
+-        return mysql_data_seek($this->sh, $row_number);
++        return mysqli_data_seek($this->sh, $row_number);
+     }
+ 
+ /**
+@@ -184,7 +184,7 @@
+ /**/
+     function finish() {
+         if ($this->sh && is_resource($this->sh))
+-            mysql_free_result($this->sh);
++            mysqli_free_result($this->sh);
+         unset($this->sh);
+     }
+ 
+diff -ru orig/includes/database.php mythweb-0.27.5/includes/database.php
+--- orig/includes/database.php	2015-05-03 22:39:10.000000000 +0100
++++ mythweb-0.27.5/includes/database.php	2016-01-23 16:31:19.145040187 +0000
+@@ -10,7 +10,7 @@
+ /**/
+ 
+ // No MySQL libraries installed in PHP
+-    if (!function_exists('mysql_connect')) {
++    if (!function_exists('mysqli_connect')) {
+         custom_error("Please install the MySQL libraries for PHP.\n"
+                     .'The package is usually called something like php-mysql.');
+     }
+diff -ru orig/modules/tv/classes/Program.php mythweb-0.27.5/modules/tv/classes/Program.php
+--- orig/modules/tv/classes/Program.php	2015-05-03 22:39:10.000000000 +0100
++++ mythweb-0.27.5/modules/tv/classes/Program.php	2016-01-23 16:43:48.364876493 +0000
+@@ -591,7 +591,7 @@
+                          $this->programid,
+                          $this->findid);
+         while ($row = $sh->fetch_assoc()) {
+-            $prog =& new Program($row);
++            $prog = new Program($row);
+             MythBackend::find()->sendCommand(array('FORGET_RECORDING', $prog->backend_row(), '0'));
+         }
+         $sh->finish();
+@@ -602,7 +602,7 @@
+  * "Never" record this show, by telling mythtv that it was already recorded
+ /**/
+     public function rec_never_record() {
+-        $result = mysql_query('REPLACE INTO oldrecorded (chanid,starttime,endtime,title,subtitle,description,category,seriesid,programid,recordid,station,rectype,recstatus,duplicate) VALUES ('
++        $result = mysqli_query('REPLACE INTO oldrecorded (chanid,starttime,endtime,title,subtitle,description,category,seriesid,programid,recordid,station,rectype,recstatus,duplicate) VALUES ('
+                                 .escape($this->chanid)                    .','
+                                 .'NOW()'                                  .','
+                                 .'NOW()'                                  .','
+@@ -617,7 +617,7 @@
+                                 .escape(isset($this->rectype) ? $this->rectype : 0)                   .','
+                                 .'11'                                     .','
+                                 .'1'                                      .')')
+-            or trigger_error('SQL Error: '.mysql_error(), FATAL);
++            or trigger_error('SQL Error: '.mysqli_error(), FATAL);
+     // Notify the backend of the changes
+         MythBackend::find()->rescheduleRecording();
+     }
+diff -ru orig/modules/tv/classes/Schedule.php mythweb-0.27.5/modules/tv/classes/Schedule.php
+--- orig/modules/tv/classes/Schedule.php	2015-05-03 22:39:10.000000000 +0100
++++ mythweb-0.27.5/modules/tv/classes/Schedule.php	2016-01-23 16:43:13.199838450 +0000
+@@ -154,7 +154,7 @@
+                 if ($program[21] == 6)
+                     continue;
+                 // Normal entry:  $scheduledRecordings[callsign][starttime][]
+-                self::$scheduledRecordings[$program[9]][$program[13]][] =& new Program($program);
++                self::$scheduledRecordings[$program[9]][$program[13]][] = new Program($program);
+             }
+             Cache::set('Schedule::findScheduled', self::$scheduledRecordings);
+         }
+@@ -625,18 +625,18 @@
+         // Default
+             $groups['Default'] = t('Default');
+         // Current recgroups
+-            $result = mysql_query('SELECT DISTINCT recgroup FROM recorded '.
++            $result = mysqli_query('SELECT DISTINCT recgroup FROM recorded '.
+                 'WHERE recgroup != "LiveTV" AND recgroup != "Deleted" UNION '.
+                 'SELECT DISTINCT recgroup FROM record '.
+                 'WHERE recgroup != "LiveTV" AND recgroup != "Deleted" '.
+                 'ORDER BY recgroup;');
+ 
+-            while (list($group) = mysql_fetch_row($result)) {
++            while (list($group) = mysqli_fetch_row($result)) {
+                 if (empty($group) || $group == 'Default')
+                     continue;
+                 $groups[$group] = $group;
+             }
+-            mysql_free_result($result);
++            mysqli_free_result($result);
+         }
+     // Guess at default. Try category match etc..
+         if (count($groups) > 1 && empty($this_group)) {
+@@ -676,12 +676,12 @@
+         // Default
+             $groups['Default'] = 'Default';
+         // Configured Storage Groups
+-            $result = mysql_query('SELECT DISTINCT groupname FROM storagegroup');
+-            while (list($group) = mysql_fetch_row($result)) {
++            $result = mysqli_query('SELECT DISTINCT groupname FROM storagegroup');
++            while (list($group) = mysqli_fetch_row($result)) {
+                 $group or $group = 'Default';
+                 $groups[$group]  = $group;
+             }
+-            mysql_free_result($result);
++            mysqli_free_result($result);
+         }
+     // Print the <select>
+         echo "<select name=\"$name\">";
